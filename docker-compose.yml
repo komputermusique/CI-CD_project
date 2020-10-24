@@ -1,0 +1,83 @@
+﻿version: '3'
+services:
+ gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    #build:
+    #    context: gitea
+    restart: unless-stopped
+    ports:
+         - 222:22
+         - 3000:3000
+    volumes: 
+         - ./gitea/data:/data
+ gocd: 
+    container_name: gocd
+    image: gocd/gocd-server:v20.8.0 
+    build:
+      context: gocd
+    ports:
+      - 8153:8153
+      - 8154:8154
+    volumes:
+      - ./gocd/data:/godata
+ agent:
+    container_name: agent
+    image: gocd/gocd-agent-debian-9:v20.8.0
+    build:
+        context: gocd/docker-gocd-agent-debian-9
+    #restart: on-failure
+    links:
+        - "gocd"
+    depends_on:
+        - "gocd"
+    environment:  
+        - GO_SERVER_URL=http://gocd:8153/go
+  
+ db:
+    image: postgres:11-alpine
+    container_name: taiga-db
+    restart: unless-stopped
+    env_file:
+      - ./config/variables.env
+    volumes:
+      - ./taiga/data/db:/var/lib/postgresql/data
+ back:
+    image: dockertaiga/back:5.5.5
+    container_name: taiga-back
+    restart: unless-stopped
+    depends_on:
+      - db
+    volumes:
+      - ./taiga/data/media:/taiga-media
+      - ./config/back:/taiga-conf
+ front:
+    image: dockertaiga/front:5.5.5
+    build: ./taiga/front
+    container_name: taiga-front
+    restart: unless-stopped
+    volumes:
+      - ./config/front:/taiga-conf
+
+ proxy:
+    image: dockertaiga/proxy
+    container_name: taiga-proxy
+    restart: unless-stopped
+    depends_on:
+      - back
+      - front
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      #- ./cert:/taiga-cert
+      - ./config/proxy:/taiga-conf
+    env_file:
+      - ./config/variables.env
+ events:
+    image: dockertaiga/events
+    container_name: taiga-events
+    restart: unless-stopped
+    env_file:
+      - ./config/variables.env
+
